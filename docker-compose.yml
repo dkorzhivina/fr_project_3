@@ -1,0 +1,110 @@
+networks:
+  backend:
+
+volumes:
+  pgdata:
+  appdata:
+  csvdata:
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: iss_db
+    environment:
+      POSTGRES_DB: monolith
+      POSTGRES_USER: monouser
+      POSTGRES_PASSWORD: monopass
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U monouser -d monolith"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    networks:
+      - backend
+    ports:
+      - "5432:5432"
+
+  rust_iss:
+    build:
+      context: ./services/rust-iss
+    container_name: rust_iss
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://monouser:monopass@db:5432/monolith}
+      NASA_API_URL: ${NASA_API_URL:-}
+      NASA_API_KEY: ${NASA_API_KEY:-}
+      FETCH_EVERY_SECONDS: ${FETCH_EVERY_SECONDS:-600}
+      WHERE_ISS_URL: ${WHERE_ISS_URL:-https://api.wheretheiss.at/v1/satellites/25544}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - backend
+    ports:
+      - "8081:3000"
+
+  php:
+    build:
+      context: ./services/php-web
+    container_name: php_web
+    environment:
+      JWST_HOST: https://api.jwstapi.com
+      JWST_API_KEY: baa96cdf-4a82-45f1-b986-d10a96826442
+      JWST_EMAIL: burnfeniks@yandex.ru
+      JWST_PROGRAM_ID: "2734"
+      ASTRO_APP_ID: "b7a4a63c-adc4-4ae3-bb0e-7dc602d2ce30"
+      ASTRO_APP_SECRET: "a32781e1db2731606605d84180475ba6f3773bfeae0c376e7cad317cdd5d8bdaacdd0c38333757d8fc9886682bde24052feed1de72b67f63d37a236cb37f7beb300a0befd9b3fcd1fc60114846162b3509a3031903467bb40dacd8b111ca6c02f8de52d9e0d5233340acac35363dd34f"
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:8082
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: monolith
+      DB_USERNAME: monouser
+      DB_PASSWORD: monopass
+    depends_on:
+      db:
+        condition: service_healthy
+      rust_iss:
+        condition: service_started
+    networks:
+      - backend
+    volumes:
+      - appdata:/var/www/html
+      - ./services/php-web/laravel-patches:/opt/laravel-patches:ro
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: web_nginx
+    depends_on:
+      - php
+    volumes:
+      - appdata:/var/www/html:ro
+      - ./services/php-web/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - backend
+    ports:
+      - "8082:80"
+
+  pascal_legacy:
+    build:
+      context: ./services/pascal-legacy
+    container_name: pascal_legacy
+    environment:
+      CSV_OUT_DIR: /data/csv
+      GEN_PERIOD_SEC: ${PAS_LEGACY_PERIOD:-300}
+      PGHOST: db
+      PGPORT: 5432
+      PGUSER: monouser
+      PGPASSWORD: monopass
+      PGDATABASE: monolith
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - csvdata:/data/csv
+    networks:
+      - backend
