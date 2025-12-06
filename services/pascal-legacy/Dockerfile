@@ -1,14 +1,18 @@
 FROM debian:12-slim
 
+ENV DEBIAN_FRONTEND=noninteractive
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    fp-compiler \
+    build-essential \
     fpc \
-    fcl-process \
+    fpc-source \
     libncurses-dev \
     libc6-dev \
     postgresql-client \
     ca-certificates \
- && rm -rf /var/lib/apt/lists/*
+    zip \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/legacy
 

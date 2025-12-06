@@ -105,6 +105,6 @@ services:
       db:
         condition: service_healthy
     volumes:
-      - csvdata:/data/csv
+      - ./services/pascal-legacy/data:/data/csv
     networks:
       - backend
