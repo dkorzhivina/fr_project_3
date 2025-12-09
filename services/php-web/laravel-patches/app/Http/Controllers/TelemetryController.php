@@ -14,6 +14,18 @@ class TelemetryController extends Controller
 
     public function list(Request $request)
     {
+        $validated = $request->validate([
+            'search'    => ['nullable','string','max:200'],
+            'keywords'  => ['nullable','string','max:200'],
+            'from'      => ['nullable','date'],
+            'to'        => ['nullable','date'],
+            'flag_a'    => ['nullable','boolean'],
+            'flag_b'    => ['nullable','boolean'],
+            'sort'      => ['nullable','in:recorded_at,voltage,temp,count'],
+            'dir'       => ['nullable','in:asc,desc'],
+            'per_page'  => ['nullable','integer','min:1','max:200'],
+        ]);
+
         $q = TelemetryLegacy::query();
 
         if ($request->filled('search')) {
@@ -22,6 +34,20 @@ class TelemetryController extends Controller
                 $sub->where('note', 'ilike', "%{$search}%")
                     ->orWhere('source_file', 'ilike', "%{$search}%");
             });
+        }
+
+        if ($request->filled('keywords')) {
+            $words = array_filter(preg_split('~\s+~u', $request->input('keywords')), fn($w) => mb_strlen($w) > 1);
+            if ($words) {
+                $q->where(function($sub) use ($words) {
+                    foreach ($words as $w) {
+                        $sub->where(function($x) use ($w) {
+                            $x->where('note', 'ilike', "%{$w}%")
+                              ->orWhere('source_file', 'ilike', "%{$w}%");
+                        });
+                    }
+                });
+            }
         }
 
         if ($request->filled('from')) {

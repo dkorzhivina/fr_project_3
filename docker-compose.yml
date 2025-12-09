@@ -50,15 +50,20 @@ services:
       context: ./services/php-web
     container_name: php_web
     environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:8082
+      CACHE_DRIVER: redis
+      SESSION_DRIVER: redis
+      QUEUE_CONNECTION: redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       JWST_HOST: https://api.jwstapi.com
       JWST_API_KEY: baa96cdf-4a82-45f1-b986-d10a96826442
       JWST_EMAIL: burnfeniks@yandex.ru
       JWST_PROGRAM_ID: "2734"
       ASTRO_APP_ID: "b7a4a63c-adc4-4ae3-bb0e-7dc602d2ce30"
       ASTRO_APP_SECRET: "a32781e1db2731606605d84180475ba6f3773bfeae0c376e7cad317cdd5d8bdaacdd0c38333757d8fc9886682bde24052feed1de72b67f63d37a236cb37f7beb300a0befd9b3fcd1fc60114846162b3509a3031903467bb40dacd8b111ca6c02f8de52d9e0d5233340acac35363dd34f"
-      APP_ENV: local
-      APP_DEBUG: "true"
-      APP_URL: http://localhost:8082
       DB_CONNECTION: pgsql
       DB_HOST: db
       DB_PORT: 5432
@@ -88,6 +93,15 @@ services:
       - backend
     ports:
       - "8082:80"
+
+  redis:
+    image: redis:7-alpine
+    container_name: cache_redis
+    command: ["redis-server","--save","60","1000","--loglevel","warning"]
+    networks:
+      - backend
+    ports:
+      - "6379:6379"
 
   pascal_legacy:
     build:

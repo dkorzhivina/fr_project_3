@@ -7,17 +7,37 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        Schema::create('cms_blocks', function (Blueprint $table) {
-            $table->id();
-            $table->string('slug')->unique();
-            $table->text('content')->nullable();
-            $table->boolean('is_active')->default(true);
-            $table->timestamps();
+        Schema::table('telemetry_legacy', function (Blueprint $table) {
+            if (!Schema::hasColumn('telemetry_legacy', 'flag_a')) {
+                $table->boolean('flag_a')->default(false)->after('recorded_at');
+            }
+            if (!Schema::hasColumn('telemetry_legacy', 'flag_b')) {
+                $table->boolean('flag_b')->default(false)->after('flag_a');
+            }
+            if (!Schema::hasColumn('telemetry_legacy', 'count')) {
+                $table->integer('count')->default(0)->after('temp');
+            }
+            if (!Schema::hasColumn('telemetry_legacy', 'note')) {
+                $table->text('note')->nullable()->after('count');
+            }
         });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('cms_blocks');
+        Schema::table('telemetry_legacy', function (Blueprint $table) {
+            if (Schema::hasColumn('telemetry_legacy', 'note')) {
+                $table->dropColumn('note');
+            }
+            if (Schema::hasColumn('telemetry_legacy', 'count')) {
+                $table->dropColumn('count');
+            }
+            if (Schema::hasColumn('telemetry_legacy', 'flag_b')) {
+                $table->dropColumn('flag_b');
+            }
+            if (Schema::hasColumn('telemetry_legacy', 'flag_a')) {
+                $table->dropColumn('flag_a');
+            }
+        });
     }
 };

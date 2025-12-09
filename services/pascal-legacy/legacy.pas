@@ -50,7 +50,7 @@ begin
   Writeln(f, 'recorded_at,flag_A,flag_B,voltage,temp,count,note,source_file');
   for i := 1 to rows do
   begin
-    recorded_at := FormatDateTime('yyyy-mm-dd hh:nn:ss', IncSecond(Now, - (rows - i) * 60));
+    recorded_at := FormatDateTime('yyyy-mm-dd"T"hh:nn:ss"Z"', IncSecond(Now, - (rows - i) * 60));
     voltage := RandFloat(3.2, 12.6);
     temp := RandFloat(-50.0, 80.0);
     countVal := Random(1000);
@@ -60,8 +60,8 @@ begin
 
     Writeln(f,
       recorded_at + ',' +
-      IfThen(flagA, 'TRUE', 'FALSE') + ',' +
-      IfThen(flagB, 'TRUE', 'FALSE') + ',' +
+      IfThen(flagA, 'ИСТИНА', 'ЛОЖЬ') + ',' +
+      IfThen(flagB, 'ИСТИНА', 'ЛОЖЬ') + ',' +
       FormatFloat('0.00', voltage) + ',' +
       FormatFloat('0.00', temp) + ',' +
       IntToStr(countVal) + ',' +
@@ -170,7 +170,8 @@ procedure CreateExcelFromCSV(const csvPath: string);
 var
   xmlPath: string;
 begin
-  xmlPath := ChangeFileExt(csvPath, '.xml');
+  // генерируем XML (SpreadsheetML 2003) и сохраняем с расширением .xlsx для удобства импорта
+  xmlPath := ChangeFileExt(csvPath, '.xlsx');
   CreateExcelFallbackXML(csvPath, xmlPath);
 end;
 
@@ -278,7 +279,9 @@ begin
   begin
     Writeln('COPY command exit code: ', exitCode);
     Writeln(outLines.Text);
-  end;
+  end
+  else
+    Writeln('[pascal] generated CSV + HTML preview + XLSX(xml) + imported to Postgres');
   outLines.Free;
 end;
 

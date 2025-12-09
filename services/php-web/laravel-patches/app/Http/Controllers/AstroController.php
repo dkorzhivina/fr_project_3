@@ -8,6 +8,12 @@ class AstroController extends Controller
 {
     public function events(Request $r)
     {
+        $r->validate([
+            'lat'  => ['nullable','numeric'],
+            'lon'  => ['nullable','numeric'],
+            'days' => ['nullable','integer','min:1','max:30'],
+        ]);
+
         $lat  = (float) $r->query('lat', 55.7558);
         $lon  = (float) $r->query('lon', 37.6176);
         $days = max(1, min(30, (int) $r->query('days', 7)));
@@ -18,10 +24,15 @@ class AstroController extends Controller
         $appId  = env('ASTRO_APP_ID', '');
         $secret = env('ASTRO_APP_SECRET', '');
         if ($appId === '' || $secret === '') {
-            return response()->json(['error' => 'Missing ASTRO_APP_ID/ASTRO_APP_SECRET'], 500);
+            return response()->json([
+                'ok' => false,
+                'error' => [
+                    'code' => 'CONFIG_MISSING',
+                    'message' => 'Missing ASTRO_APP_ID/ASTRO_APP_SECRET',
+                ],
+            ], 200);
         }
 
-        $auth = base64_encode($appId . ':' . $secret);
         $url  = 'https://api.astronomyapi.com/api/v2/bodies/events?' . http_build_query([
             'latitude'  => $lat,
             'longitude' => $lon,
@@ -33,10 +44,11 @@ class AstroController extends Controller
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER     => [
-                'Authorization: Basic ' . $auth,
-                'Content-Type: application/json',
+                'Accept: application/json',
                 'User-Agent: monolith-iss/1.0'
             ],
+            CURLOPT_USERPWD        => $appId . ':' . $secret, // Basic auth, без ручных заголовков
+            CURLOPT_HTTPAUTH       => CURLAUTH_BASIC,
             CURLOPT_TIMEOUT        => 25,
         ]);
         $raw  = curl_exec($ch);
@@ -45,7 +57,15 @@ class AstroController extends Controller
         curl_close($ch);
 
         if ($raw === false || $code >= 400) {
-            return response()->json(['error' => $err ?: ("HTTP " . $code), 'code' => $code, 'raw' => $raw], 403);
+            return response()->json([
+                'ok' => false,
+                'error' => [
+                    'code' => $code === 403 ? 'UPSTREAM_403' : 'UPSTREAM_ERROR',
+                    'message' => $err ?: ("HTTP " . $code),
+                    'status' => $code,
+                ],
+                'raw' => $raw,
+            ], 200);
         }
         $json = json_decode($raw, true);
         return response()->json($json ?? ['raw' => $raw]);
