@@ -53,16 +53,8 @@ class DashboardController extends Controller
      *  - instrument: NIRCam|MIRI|NIRISS|NIRSpec|FGS
      *  - page, perPage
      */
-    public function jwstFeed(Request $r)
+    public function jwstFeed(\App\Http\Requests\JwstFeedRequest $r)
     {
-        $r->validate([
-            'source'    => ['nullable','in:jpg,suffix,program'],
-            'suffix'    => ['nullable','string','max:50'],
-            'program'   => ['nullable','string','max:50'],
-            'instrument'=> ['nullable','string','max:50'],
-            'page'      => ['nullable','integer','min:1','max:50'],
-            'perPage'   => ['nullable','integer','min:1','max:60'],
-        ]);
 
         $src   = $r->query('source', 'jpg');
         $sfx   = trim((string) $r->query('suffix', ''));
@@ -132,7 +124,7 @@ class DashboardController extends Controller
     }
 
     // Сохраняем старый JSON endpoint для таблицы телеметрии (если зовут напрямую)
-    public function data(Request $request)
+    public function data(\App\Http\Requests\DashboardDataRequest $request)
     {
         $query = DB::table('telemetry_legacy')
             ->select([

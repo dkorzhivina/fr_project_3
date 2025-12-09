@@ -2,17 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+use App\Http\Requests\AstroEventsRequest;
 
 class AstroController extends Controller
 {
-    public function events(Request $r)
+    public function events(AstroEventsRequest $r)
     {
-        $r->validate([
-            'lat'  => ['nullable','numeric'],
-            'lon'  => ['nullable','numeric'],
-            'days' => ['nullable','integer','min:1','max:30'],
-        ]);
 
         $lat  = (float) $r->query('lat', 55.7558);
         $lon  = (float) $r->query('lon', 37.6176);
@@ -21,8 +16,14 @@ class AstroController extends Controller
         $from = now('UTC')->toDateString();
         $to   = now('UTC')->addDays($days)->toDateString();
 
-        $appId  = env('ASTRO_APP_ID', '');
-        $secret = env('ASTRO_APP_SECRET', '');
+        // Используем getenv() напрямую, так как env() может не работать в некоторых контекстах
+        $appId  = getenv('ASTRO_APP_ID') ?: env('ASTRO_APP_ID', '');
+        $secret = getenv('ASTRO_APP_SECRET') ?: env('ASTRO_APP_SECRET', '');
+        
+        // Убираем кавычки, если они есть
+        $appId = trim($appId, '"\'');
+        $secret = trim($secret, '"\'');
+        
         if ($appId === '' || $secret === '') {
             return response()->json([
                 'ok' => false,
@@ -40,16 +41,25 @@ class AstroController extends Controller
             'to'        => $to,
         ]);
 
+        // AstronomyAPI использует Basic Auth с appId:secret
+        // Убеждаемся, что нет лишних пробелов или символов
+        $appId = trim($appId);
+        $secret = trim($secret);
+        $credentials = $appId . ':' . $secret;
+        $authHeader = 'Basic ' . base64_encode($credentials);
+        
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER     => [
                 'Accept: application/json',
+                'Authorization: ' . trim($authHeader),
                 'User-Agent: monolith-iss/1.0'
             ],
-            CURLOPT_USERPWD        => $appId . ':' . $secret, // Basic auth, без ручных заголовков
-            CURLOPT_HTTPAUTH       => CURLAUTH_BASIC,
             CURLOPT_TIMEOUT        => 25,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_VERBOSE        => false, // для отладки можно включить
         ]);
         $raw  = curl_exec($ch);
         $code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE) ?: 0;

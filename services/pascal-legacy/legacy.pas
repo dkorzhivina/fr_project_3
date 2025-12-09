@@ -33,11 +33,28 @@ begin
     Result := t;
 end;
 
+function DateTimeToUnixTimestamp(const dt: TDateTime): Int64;
+var
+  epoch: TDateTime;
+begin
+  epoch := EncodeDate(1970, 1, 1);
+  Result := Round((dt - epoch) * 86400.0);
+end;
+
+function UnixToDateTime(ts: Int64): TDateTime;
+var
+  epoch: TDateTime;
+begin
+  epoch := EncodeDate(1970, 1, 1);
+  Result := epoch + (ts / 86400.0);
+end;
+
 procedure WriteCSV(const fullpath: string; rows: Integer);
 var
   f: TextFile;
   i: Integer;
-  recorded_at: string;
+  recorded_at_ts: Int64;
+  recorded_at_dt: TDateTime;
   voltage, temp: Double;
   flagA, flagB: Boolean;
   note: string;
@@ -50,26 +67,78 @@ begin
   Writeln(f, 'recorded_at,flag_A,flag_B,voltage,temp,count,note,source_file');
   for i := 1 to rows do
   begin
-    recorded_at := FormatDateTime('yyyy-mm-dd"T"hh:nn:ss"Z"', IncSecond(Now, - (rows - i) * 60));
+    recorded_at_dt := IncSecond(Now, - (rows - i) * 60);
+    recorded_at_ts := DateTimeToUnixTimestamp(recorded_at_dt);
     voltage := RandFloat(3.2, 12.6);
     temp := RandFloat(-50.0, 80.0);
     countVal := Random(1000);
     flagA := RandBool;
     flagB := RandBool;
-    note := Format('Sample note %d at %s', [i, recorded_at]);
+    note := Format('Sample note %d', [i]);
 
+    // Записываем timestamp как число, числа без кавычек, логические как ИСТИНА/ЛОЖЬ, строки в кавычках если нужно
     Writeln(f,
-      recorded_at + ',' +
+      IntToStr(recorded_at_ts) + ',' +
       IfThen(flagA, 'ИСТИНА', 'ЛОЖЬ') + ',' +
       IfThen(flagB, 'ИСТИНА', 'ЛОЖЬ') + ',' +
       FormatFloat('0.00', voltage) + ',' +
       FormatFloat('0.00', temp) + ',' +
       IntToStr(countVal) + ',' +
       EscapeCSV(note) + ',' +
-      fn
+      EscapeCSV(fn)
     );
   end;
   CloseFile(f);
+end;
+
+function ParseCSVLine(const line: string; out cols: TStringList): Boolean;
+var
+  i: Integer;
+  inQuotes: Boolean;
+  current: string;
+  ch: Char;
+begin
+  Result := False;
+  cols.Clear;
+  inQuotes := False;
+  current := '';
+  for i := 1 to Length(line) do
+  begin
+    ch := line[i];
+    if ch = '"' then
+    begin
+      if (i < Length(line)) and (line[i + 1] = '"') then
+      begin
+        current := current + '"';
+        Inc(i);
+      end
+      else
+        inQuotes := not inQuotes;
+    end
+    else if (ch = ',') and not inQuotes then
+    begin
+      cols.Add(current);
+      current := '';
+    end
+    else
+      current := current + ch;
+  end;
+  cols.Add(current);
+  Result := True;
+end;
+
+function FormatTimestamp(ts: string): string;
+var
+  tsInt: Int64;
+  dt: TDateTime;
+begin
+  if TryStrToInt64(ts, tsInt) then
+  begin
+    dt := UnixToDateTime(tsInt);
+    Result := FormatDateTime('yyyy-mm-dd hh:nn:ss', dt);
+  end
+  else
+    Result := ts;
 end;
 
 procedure CSVToHTML(const csvPath, htmlPath: string);
@@ -78,44 +147,88 @@ var
   outF: TextFile;
   i, j: Integer;
   cols: TStringList;
+  headerCols: TStringList;
   line: string;
+  cellValue: string;
+  colName: string;
 begin
   if not FileExists(csvPath) then Exit;
   sl := TStringList.Create;
   cols := TStringList.Create;
+  headerCols := TStringList.Create;
   try
     sl.LoadFromFile(csvPath);
     AssignFile(outF, htmlPath);
     Rewrite(outF);
-    Writeln(outF, '<!doctype html><html><head><meta charset="utf-8"><title>' + ExtractFileName(csvPath) + '</title>');
-    Writeln(outF, '<style>table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:6px;text-align:left}th{background:#f4f4f4}</style>');
+    Writeln(outF, '<!doctype html>');
+    Writeln(outF, '<html><head>');
+    Writeln(outF, '<meta charset="utf-8">');
+    Writeln(outF, '<meta name="viewport" content="width=device-width, initial-scale=1">');
+    Writeln(outF, '<title>' + ExtractFileName(csvPath) + '</title>');
+    Writeln(outF, '<style>');
+    Writeln(outF, 'body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }');
+    Writeln(outF, '.container { max-width: 100%; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }');
+    Writeln(outF, 'h2 { color: #333; margin-bottom: 20px; }');
+    Writeln(outF, 'table { border-collapse: collapse; width: 100%; font-size: 14px; }');
+    Writeln(outF, 'th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }');
+    Writeln(outF, 'th { background: #4CAF50; color: white; font-weight: bold; position: sticky; top: 0; }');
+    Writeln(outF, 'tr:nth-child(even) { background: #f9f9f9; }');
+    Writeln(outF, 'tr:hover { background: #f1f1f1; }');
+    Writeln(outF, '.number { text-align: right; font-family: monospace; }');
+    Writeln(outF, '.timestamp { font-family: monospace; color: #666; }');
+    Writeln(outF, '.boolean-true { color: #4CAF50; font-weight: bold; }');
+    Writeln(outF, '.boolean-false { color: #f44336; font-weight: bold; }');
+    Writeln(outF, '</style>');
     Writeln(outF, '</head><body>');
-    Writeln(outF, '<h2>Preview: ' + ExtractFileName(csvPath) + '</h2>');
+    Writeln(outF, '<div class="container">');
+    Writeln(outF, '<h2>📊 Telemetry Data: ' + ExtractFileName(csvPath) + '</h2>');
     Writeln(outF, '<table>');
     if sl.Count > 0 then
     begin
       line := sl[0];
-      cols.Delimiter := ',';
-      cols.StrictDelimiter := True;
-      cols.DelimitedText := line;
+      ParseCSVLine(line, headerCols);
       Writeln(outF, '<thead><tr>');
-      for j := 0 to cols.Count - 1 do
-        Writeln(outF, '<th>' + cols[j] + '</th>');
+      for j := 0 to headerCols.Count - 1 do
+        Writeln(outF, '<th>' + headerCols[j] + '</th>');
       Writeln(outF, '</tr></thead>');
     end;
     Writeln(outF, '<tbody>');
     for i := 1 to sl.Count - 1 do
     begin
       line := sl[i];
-      cols.DelimitedText := line;
+      ParseCSVLine(line, cols);
       Writeln(outF, '<tr>');
       for j := 0 to cols.Count - 1 do
-        Writeln(outF, '<td>' + cols[j] + '</td>');
+      begin
+        cellValue := cols[j];
+        colName := '';
+        if j < headerCols.Count then
+          colName := headerCols[j];
+        
+        // Apply formatting based on column name
+        if colName = 'recorded_at' then
+          cellValue := '<span class="timestamp">' + FormatTimestamp(cellValue) + '</span>'
+        else if (colName = 'flag_A') or (colName = 'flag_B') then
+        begin
+          if cellValue = 'ИСТИНА' then
+            cellValue := '<span class="boolean-true">' + cellValue + '</span>'
+          else
+            cellValue := '<span class="boolean-false">' + cellValue + '</span>';
+        end
+        else if (colName = 'voltage') or (colName = 'temp') or (colName = 'count') then
+          cellValue := '<span class="number">' + cellValue + '</span>'
+        else
+          cellValue := StringReplace(StringReplace(cellValue, '<', '&lt;', [rfReplaceAll]), '>', '&gt;', [rfReplaceAll]);
+        
+        Writeln(outF, '<td>' + cellValue + '</td>');
+      end;
       Writeln(outF, '</tr>');
     end;
-    Writeln(outF, '</tbody></table></body></html>');
+    Writeln(outF, '</tbody></table>');
+    Writeln(outF, '</div></body></html>');
     CloseFile(outF);
   finally
+    headerCols.Free;
     cols.Free;
     sl.Free;
   end;
@@ -168,11 +281,28 @@ end;
 
 procedure CreateExcelFromCSV(const csvPath: string);
 var
-  xmlPath: string;
+  xlsxPath, pythonScript, pythonCmd: string;
+  outLines: TStringList;
+  exitCode: Integer;
 begin
-  // генерируем XML (SpreadsheetML 2003) и сохраняем с расширением .xlsx для удобства импорта
-  xmlPath := ChangeFileExt(csvPath, '.xlsx');
-  CreateExcelFallbackXML(csvPath, xmlPath);
+  xlsxPath := ChangeFileExt(csvPath, '.xlsx');
+  pythonScript := '/opt/legacy/csv_to_xlsx.py';
+  
+  // Используем Python скрипт для создания настоящего XLSX файла
+  pythonCmd := 'python3 ' + pythonScript + ' ' + csvPath + ' ' + xlsxPath;
+  exitCode := RunShellCommand(pythonCmd, outLines);
+  
+  if exitCode <> 0 then
+  begin
+    Writeln('Python XLSX conversion failed, falling back to XML format');
+    Writeln(outLines.Text);
+    // Fallback на старый XML формат
+    CreateExcelFallbackXML(csvPath, xlsxPath);
+  end
+  else
+    Writeln('[pascal] Generated XLSX with proper data types');
+  
+  outLines.Free;
 end;
 
 { Run shell command using TProcess, capture stdout/stderr into TStringList and return exit code }
@@ -271,8 +401,13 @@ begin
   pgpass := GetEnvDef('PGPASSWORD', 'monopass');
   pgdb   := GetEnvDef('PGDATABASE', 'monolith');
 
+  // Используем временную таблицу для импорта с конвертацией timestamp
   copyCmd := 'PGPASSWORD=' + pgpass + ' psql "host=' + pghost + ' port=' + pgport + ' user=' + pguser + ' dbname=' + pgdb + '" ' +
-             '-c "\copy telemetry_legacy(recorded_at, flag_a, flag_b, voltage, temp, count, note, source_file) FROM ''' + fullpath + ''' WITH (FORMAT csv, HEADER true)"';
+             '-c "CREATE TEMP TABLE temp_telemetry_import(recorded_at_ts BIGINT, flag_a_str TEXT, flag_b_str TEXT, voltage NUMERIC, temp NUMERIC, count INTEGER, note TEXT, source_file TEXT); ' +
+             '\copy temp_telemetry_import(recorded_at_ts, flag_a_str, flag_b_str, voltage, temp, count, note, source_file) FROM ''' + fullpath + ''' WITH (FORMAT csv, HEADER true); ' +
+             'INSERT INTO telemetry_legacy(recorded_at, flag_a, flag_b, voltage, temp, count, note, source_file) ' +
+             'SELECT to_timestamp(recorded_at_ts), flag_a_str = ''ИСТИНА'', flag_b_str = ''ИСТИНА'', voltage, temp, count, note, source_file FROM temp_telemetry_import; ' +
+             'DROP TABLE temp_telemetry_import;"';
 
   exitCode := RunShellCommand(copyCmd, outLines);
   if exitCode <> 0 then

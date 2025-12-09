@@ -43,7 +43,9 @@ async fn main() -> anyhow::Result<()> {
 
     let nasa_url = std::env::var("NASA_API_URL")
         .unwrap_or_else(|_| "https://visualization.osdr.nasa.gov/biodata/api/v2/datasets/?format=json".to_string());
-    let nasa_key = std::env::var("NASA_API_KEY").unwrap_or_default();
+    // Используем DEMO_KEY как fallback, если API ключ не указан
+    let nasa_key = std::env::var("NASA_API_KEY")
+        .unwrap_or_else(|_| "DEMO_KEY".to_string());
 
     let fallback_url = std::env::var("WHERE_ISS_URL")
         .unwrap_or_else(|_| "https://api.wheretheiss.at/v1/satellites/25544".to_string());
@@ -414,8 +416,26 @@ async fn fetch_apod(st: &AppState) -> anyhow::Result<()> {
     let url = "https://api.nasa.gov/planetary/apod";
     let client = reqwest::Client::builder().timeout(Duration::from_secs(30)).build()?;
     let mut req = client.get(url).query(&[("thumbs","true")]);
-    if !st.nasa_key.is_empty() { req = req.query(&[("api_key",&st.nasa_key)]); }
-    let json: Value = req.send().await?.json().await?;
+    req = req.query(&[("api_key",&st.nasa_key)]);
+    let resp = req.send().await?;
+    let status = resp.status();
+    
+    if !status.is_success() {
+        let error_text = resp.text().await.unwrap_or_default();
+        // 403 может означать превышение лимита для DEMO_KEY - это не критично
+        if status == 403 {
+            anyhow::bail!("APOD API returned 403 Forbidden (possibly rate limit exceeded). Error: {}", error_text.chars().take(100).collect::<String>());
+        }
+        anyhow::bail!("APOD API returned status {}: {}", status, error_text.chars().take(200).collect::<String>());
+    }
+    
+    let text = resp.text().await?;
+    if text.trim().is_empty() {
+        anyhow::bail!("APOD API returned empty response");
+    }
+    
+    let json: Value = serde_json::from_str(&text)
+        .map_err(|e| anyhow::anyhow!("Failed to parse APOD JSON: {} (response: {})", e, text.chars().take(200).collect::<String>()))?;
     write_cache(&st.pool, "apod", json).await
 }
 
@@ -429,8 +449,26 @@ async fn fetch_neo_feed(st: &AppState) -> anyhow::Result<()> {
         ("start_date", start.to_string()),
         ("end_date", today.to_string()),
     ]);
-    if !st.nasa_key.is_empty() { req = req.query(&[("api_key",&st.nasa_key)]); }
-    let json: Value = req.send().await?.json().await?;
+    req = req.query(&[("api_key",&st.nasa_key)]);
+    let resp = req.send().await?;
+    let status = resp.status();
+    
+    if !status.is_success() {
+        let error_text = resp.text().await.unwrap_or_default();
+        // 403 может означать превышение лимита для DEMO_KEY - это не критично
+        if status == 403 {
+            anyhow::bail!("NeoWs API returned 403 Forbidden (possibly rate limit exceeded). Error: {}", error_text.chars().take(100).collect::<String>());
+        }
+        anyhow::bail!("NeoWs API returned status {}: {}", status, error_text.chars().take(200).collect::<String>());
+    }
+    
+    let text = resp.text().await?;
+    if text.trim().is_empty() {
+        anyhow::bail!("NeoWs API returned empty response");
+    }
+    
+    let json: Value = serde_json::from_str(&text)
+        .map_err(|e| anyhow::anyhow!("Failed to parse NeoWs JSON: {} (response: {})", e, text.chars().take(200).collect::<String>()))?;
     write_cache(&st.pool, "neo", json).await
 }
 
@@ -445,8 +483,25 @@ async fn fetch_donki_flr(st: &AppState) -> anyhow::Result<()> {
     let url = "https://api.nasa.gov/DONKI/FLR";
     let client = reqwest::Client::builder().timeout(Duration::from_secs(30)).build()?;
     let mut req = client.get(url).query(&[("startDate",from),("endDate",to)]);
-    if !st.nasa_key.is_empty() { req = req.query(&[("api_key",&st.nasa_key)]); }
-    let json: Value = req.send().await?.json().await?;
+    req = req.query(&[("api_key",&st.nasa_key)]);
+    let resp = req.send().await?;
+    let status = resp.status();
+    
+    if !status.is_success() {
+        let error_text = resp.text().await.unwrap_or_default();
+        if status == 403 {
+            anyhow::bail!("DONKI FLR API returned 403 Forbidden (possibly rate limit exceeded). Error: {}", error_text.chars().take(100).collect::<String>());
+        }
+        anyhow::bail!("DONKI FLR API returned status {}: {}", status, error_text.chars().take(200).collect::<String>());
+    }
+    
+    let text = resp.text().await?;
+    if text.trim().is_empty() {
+        anyhow::bail!("DONKI FLR API returned empty response");
+    }
+    
+    let json: Value = serde_json::from_str(&text)
+        .map_err(|e| anyhow::anyhow!("Failed to parse DONKI FLR JSON: {} (response: {})", e, text.chars().take(200).collect::<String>()))?;
     write_cache(&st.pool, "flr", json).await
 }
 async fn fetch_donki_cme(st: &AppState) -> anyhow::Result<()> {
@@ -454,8 +509,25 @@ async fn fetch_donki_cme(st: &AppState) -> anyhow::Result<()> {
     let url = "https://api.nasa.gov/DONKI/CME";
     let client = reqwest::Client::builder().timeout(Duration::from_secs(30)).build()?;
     let mut req = client.get(url).query(&[("startDate",from),("endDate",to)]);
-    if !st.nasa_key.is_empty() { req = req.query(&[("api_key",&st.nasa_key)]); }
-    let json: Value = req.send().await?.json().await?;
+    req = req.query(&[("api_key",&st.nasa_key)]);
+    let resp = req.send().await?;
+    let status = resp.status();
+    
+    if !status.is_success() {
+        let error_text = resp.text().await.unwrap_or_default();
+        if status == 403 {
+            anyhow::bail!("DONKI CME API returned 403 Forbidden (possibly rate limit exceeded). Error: {}", error_text.chars().take(100).collect::<String>());
+        }
+        anyhow::bail!("DONKI CME API returned status {}: {}", status, error_text.chars().take(200).collect::<String>());
+    }
+    
+    let text = resp.text().await?;
+    if text.trim().is_empty() {
+        anyhow::bail!("DONKI CME API returned empty response");
+    }
+    
+    let json: Value = serde_json::from_str(&text)
+        .map_err(|e| anyhow::anyhow!("Failed to parse DONKI CME JSON: {} (response: {})", e, text.chars().take(200).collect::<String>()))?;
     write_cache(&st.pool, "cme", json).await
 }
 
@@ -463,7 +535,19 @@ async fn fetch_donki_cme(st: &AppState) -> anyhow::Result<()> {
 async fn fetch_spacex_next(st: &AppState) -> anyhow::Result<()> {
     let url = "https://api.spacexdata.com/v4/launches/next";
     let client = reqwest::Client::builder().timeout(Duration::from_secs(30)).build()?;
-    let json: Value = client.get(url).send().await?.json().await?;
+    let resp = client.get(url).send().await?;
+    
+    if !resp.status().is_success() {
+        anyhow::bail!("SpaceX API returned status {}: {}", resp.status(), resp.text().await.unwrap_or_default());
+    }
+    
+    let text = resp.text().await?;
+    if text.trim().is_empty() {
+        anyhow::bail!("SpaceX API returned empty response");
+    }
+    
+    let json: Value = serde_json::from_str(&text)
+        .map_err(|e| anyhow::anyhow!("Failed to parse SpaceX JSON: {} (response: {})", e, text.chars().take(200).collect::<String>()))?;
     write_cache(&st.pool, "spacex", json).await
 }
 
@@ -501,7 +585,18 @@ fn t_pick(v: &Value, keys: &[&str]) -> Option<DateTime<Utc>> {
 async fn fetch_and_store_iss(pool: &PgPool, url: &str) -> anyhow::Result<()> {
     let client = reqwest::Client::builder().timeout(Duration::from_secs(20)).build()?;
     let resp = client.get(url).send().await?;
-    let json: Value = resp.json().await?;
+    
+    if !resp.status().is_success() {
+        anyhow::bail!("ISS API returned status {}: {}", resp.status(), resp.text().await.unwrap_or_default());
+    }
+    
+    let text = resp.text().await?;
+    if text.trim().is_empty() {
+        anyhow::bail!("ISS API returned empty response");
+    }
+    
+    let json: Value = serde_json::from_str(&text)
+        .map_err(|e| anyhow::anyhow!("Failed to parse ISS JSON: {} (response: {})", e, text.chars().take(200).collect::<String>()))?;
     sqlx::query("INSERT INTO iss_fetch_log (source_url, payload) VALUES ($1, $2)")
         .bind(url).bind(json).execute(pool).await?;
     Ok(())

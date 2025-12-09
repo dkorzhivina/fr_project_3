@@ -324,7 +324,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
 {{-- ===== Данный блок ===== --}}
 <div class="glass rounded p-3 mt-3">
-  <div class="card-header fw-semibold bg-transparent border-0 text-light">CMS</div>
+  <div class="card-header fw-semibold bg-transparent border-0 text-dark">CMS</div>
   <div class="card-body">
     @php
       try {
@@ -340,7 +340,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
 {{-- ===== CMS-блок из БД (нарочно сырая вставка) ===== --}}
 <div class="glass rounded p-3 mt-3">
-  <div class="card-header fw-semibold bg-transparent border-0 text-light">CMS — блок из БД</div>
+  <div class="card-header fw-semibold bg-transparent border-0 text-dark">CMS — блок из БД</div>
   <div class="card-body">
     @php
       try {
@@ -373,7 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 {{-- ===== CMS-блок из БД (нарочно сырая вставка) ===== --}}
 <div class="glass rounded p-3 mt-3">
-  <div class="card-header fw-semibold bg-transparent border-0 text-light">CMS — блок из БД</div>
+  <div class="card-header fw-semibold bg-transparent border-0 text-dark">CMS — блок из БД</div>
   <div class="card-body">
     @php
       try {

@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+use App\Http\Requests\TelemetryListRequest;
 use App\Models\TelemetryLegacy;
 
 class TelemetryController extends Controller
@@ -12,19 +12,8 @@ class TelemetryController extends Controller
         return view('telemetry.index');
     }
 
-    public function list(Request $request)
+    public function list(TelemetryListRequest $request)
     {
-        $validated = $request->validate([
-            'search'    => ['nullable','string','max:200'],
-            'keywords'  => ['nullable','string','max:200'],
-            'from'      => ['nullable','date'],
-            'to'        => ['nullable','date'],
-            'flag_a'    => ['nullable','boolean'],
-            'flag_b'    => ['nullable','boolean'],
-            'sort'      => ['nullable','in:recorded_at,voltage,temp,count'],
-            'dir'       => ['nullable','in:asc,desc'],
-            'per_page'  => ['nullable','integer','min:1','max:200'],
-        ]);
 
         $q = TelemetryLegacy::query();
 
