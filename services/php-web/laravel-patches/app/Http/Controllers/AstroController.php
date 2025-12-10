@@ -6,6 +6,16 @@ use App\Http\Requests\AstroEventsRequest;
 
 class AstroController extends Controller
 {
+    /** Убираем кавычки, фигурные скобки вида ${...} и пробелы */
+    private function sanitizeCred(?string $v): string
+    {
+        $v = trim((string)$v, " \t\n\r\0\x0B\"'");
+        if (str_starts_with($v, '${') && str_ends_with($v, '}')) {
+            $v = substr($v, 2, -1);
+        }
+        return $v;
+    }
+
     public function events(AstroEventsRequest $r)
     {
 
@@ -17,12 +27,8 @@ class AstroController extends Controller
         $to   = now('UTC')->addDays($days)->toDateString();
 
         // Используем getenv() напрямую, так как env() может не работать в некоторых контекстах
-        $appId  = getenv('ASTRO_APP_ID') ?: env('ASTRO_APP_ID', '');
-        $secret = getenv('ASTRO_APP_SECRET') ?: env('ASTRO_APP_SECRET', '');
-        
-        // Убираем кавычки, если они есть
-        $appId = trim($appId, '"\'');
-        $secret = trim($secret, '"\'');
+        $appId  = $this->sanitizeCred(getenv('ASTRO_APP_ID') ?: env('ASTRO_APP_ID', ''));
+        $secret = $this->sanitizeCred(getenv('ASTRO_APP_SECRET') ?: env('ASTRO_APP_SECRET', ''));
         
         if ($appId === '' || $secret === '') {
             return response()->json([
@@ -42,10 +48,7 @@ class AstroController extends Controller
         ]);
 
         // AstronomyAPI использует Basic Auth с appId:secret
-        // Убеждаемся, что нет лишних пробелов или символов
-        $appId = trim($appId);
-        $secret = trim($secret);
-        $credentials = $appId . ':' . $secret;
+        $credentials = trim($appId) . ':' . trim($secret);
         $authHeader = 'Basic ' . base64_encode($credentials);
         
         $ch = curl_init($url);

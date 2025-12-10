@@ -14,7 +14,7 @@
   </div>
 
   <div class="panel p-4 rounded-md shadow-sm bg-white mb-4 animate">
-    <div class="flex gap-3 flex-wrap items-end">
+    <div class="flex gap-3 flex-wrap items-end animate-fade-in">
       <div class="flex flex-col gap-1">
         <label class="text-xs text-slate-500">Быстрый поиск</label>
         <input id="search" placeholder="notes, file" class="input px-3 py-2 border rounded w-56" />
@@ -38,6 +38,21 @@
           <option value="25" selected>25</option>
           <option value="50">50</option>
         </select>
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="text-xs text-slate-500">Сортировка</label>
+        <div class="flex gap-2">
+          <select id="sort_col" class="input px-3 py-2 border rounded w-40">
+            <option value="recorded_at">Время</option>
+            <option value="voltage">Voltage</option>
+            <option value="temp">Temp</option>
+            <option value="count">Count</option>
+          </select>
+          <select id="sort_dir" class="input px-3 py-2 border rounded w-32">
+            <option value="desc">По убыванию</option>
+            <option value="asc">По возрастанию</option>
+          </select>
+        </div>
       </div>
       <div class="flex gap-2">
         <button id="apply" class="btn mint-btn" style="padding: 10px 20px;">Применить</button>
@@ -108,6 +123,9 @@
     border-radius: 16px;
     backdrop-filter: blur(10px);
   }
+  /* плавное появление карточек/панелей */
+  .animate-fade-in { animation: fadeInUp 0.45s ease; }
+  @keyframes fadeInUp { from { opacity:0; transform: translateY(10px);} to {opacity:1; transform:none;} }
   #tableWrap {
     background: rgba(255,255,255,0.9);
     border: 2px solid rgba(125,211,192,0.3);
@@ -179,6 +197,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const params = new URLSearchParams();
     params.set('page', page);
     params.set('per_page', document.getElementById('per_page').value || 25);
+    sortCol = document.getElementById('sort_col').value || sortCol;
+    sortDir = document.getElementById('sort_dir').value || sortDir;
     params.set('sort', sortCol);
     params.set('dir', sortDir);
 
@@ -243,6 +263,8 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         sortCol = c; sortDir = 'desc';
       }
+      document.getElementById('sort_col').value = sortCol;
+      document.getElementById('sort_dir').value = sortDir;
       load(1);
     });
   });
@@ -254,6 +276,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('from').value = '';
     document.getElementById('to').value = '';
     document.getElementById('per_page').value = '25';
+    document.getElementById('sort_col').value = 'recorded_at';
+    document.getElementById('sort_dir').value = 'desc';
     sortCol = 'recorded_at'; sortDir = 'desc';
     load(1);
   });

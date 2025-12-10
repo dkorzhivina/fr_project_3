@@ -93,7 +93,7 @@ async fn main() -> anyhow::Result<()> {
         let st = state.clone();
         tokio::spawn(async move {
             loop {
-                if let Err(e) = fetch_apod(&st).await { error!("apod err {e:?}") }
+                if let Err(e) = fetch_apod(&st).await { tracing::warn!("apod warn {e:?}") }
                 tokio::time::sleep(Duration::from_secs(st.every_apod)).await;
             }
         });
@@ -422,9 +422,18 @@ async fn fetch_apod(st: &AppState) -> anyhow::Result<()> {
     
     if !status.is_success() {
         let error_text = resp.text().await.unwrap_or_default();
-        // 403 может означать превышение лимита для DEMO_KEY - это не критично
+        // 403 может означать превышение лимита для DEMO_KEY — не падаем, просто логируем в кэш
         if status == 403 {
-            anyhow::bail!("APOD API returned 403 Forbidden (possibly rate limit exceeded). Error: {}", error_text.chars().take(100).collect::<String>());
+            let info = serde_json::json!({
+                "error": "rate_limited",
+                "source": "apod",
+                "status": 403,
+                "message": error_text.chars().take(200).collect::<String>(),
+                "at": Utc::now(),
+            });
+            // Пишем информацию об ошибке в кэш, чтобы фронтенд мог показать сообщение
+            let _ = write_cache(&st.pool, "apod", info).await;
+            return Ok(());
         }
         anyhow::bail!("APOD API returned status {}: {}", status, error_text.chars().take(200).collect::<String>());
     }
