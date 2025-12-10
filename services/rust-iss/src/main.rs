@@ -604,10 +604,32 @@ async fn fetch_and_store_iss(pool: &PgPool, url: &str) -> anyhow::Result<()> {
 async fn fetch_and_store_osdr(st: &AppState) -> anyhow::Result<usize> {
     let client = reqwest::Client::builder().timeout(Duration::from_secs(30)).build()?;
     let resp = client.get(&st.nasa_url).send().await?;
-    if !resp.status().is_success() {
-        anyhow::bail!("OSDR request status {}", resp.status());
+    let status = resp.status();
+    
+    if !status.is_success() {
+        let error_text = resp.text().await.unwrap_or_default();
+        anyhow::bail!("OSDR API returned status {}: {}", status, error_text.chars().take(200).collect::<String>());
     }
-    let json: Value = resp.json().await?;
+    
+    // Проверяем Content-Type
+    let content_type = resp.headers()
+        .get("content-type")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("")
+        .to_lowercase();
+    
+    let text = resp.text().await?;
+    if text.trim().is_empty() {
+        anyhow::bail!("OSDR API returned empty response");
+    }
+    
+    // Если ответ не JSON (например, HTML), пропускаем этот запрос
+    if !content_type.contains("json") && (text.trim_start().starts_with("<!") || text.trim_start().starts_with("<html")) {
+        anyhow::bail!("OSDR API returned HTML instead of JSON (possibly authentication required or wrong URL). Content-Type: {}, URL: {}", content_type, st.nasa_url);
+    }
+    
+    let json: Value = serde_json::from_str(&text)
+        .map_err(|e| anyhow::anyhow!("Failed to parse OSDR JSON: {} (Content-Type: {}, response preview: {})", e, content_type, text.chars().take(200).collect::<String>()))?;
     let items = if let Some(a) = json.as_array() { a.clone() }
         else if let Some(v) = json.get("items").and_then(|x| x.as_array()) { v.clone() }
         else if let Some(v) = json.get("results").and_then(|x| x.as_array()) { v.clone() }
