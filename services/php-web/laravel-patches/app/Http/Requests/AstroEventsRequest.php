@@ -17,7 +17,7 @@ class AstroEventsRequest extends FormRequest
             'body' => ['nullable', 'string', 'in:sun,moon'],
             'lat'  => ['nullable', 'numeric', 'between:-90,90'],
             'lon'  => ['nullable', 'numeric', 'between:-180,180'],
-            'days' => ['nullable', 'integer', 'min:1', 'max:3000'],
+            'days' => ['nullable', 'integer', 'min:1', 'max:30'],
             'from_date' => ['nullable', 'date', 'date_format:Y-m-d'],
             'to_date' => ['nullable', 'date', 'date_format:Y-m-d'],
         ];
